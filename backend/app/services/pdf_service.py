@@ -21,7 +21,7 @@ from functools import partial
 from typing import Optional
 from uuid import UUID
 
-from fastapi import HTTPException, UploadFile, status
+from fastapi import BackgroundTasks, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.pdf_repository import PdfRepository
@@ -56,6 +56,7 @@ class PdfService:
         self,
         user_id: UUID,
         file: UploadFile,
+        background_tasks: BackgroundTasks,
         exam_name: Optional[str],
         exam_year: Optional[int],
         exam_shift: Optional[str],
@@ -65,6 +66,7 @@ class PdfService:
         Validate, upload to storage, create DB records, dispatch Celery task.
         """
         from app.core.config import get_settings
+        settings = get_settings()
 
         # ── Read file ──────────────────────────────────────────────────────────
         file_bytes = await file.read()
@@ -139,7 +141,11 @@ class PdfService:
         # For safety we dispatch after yielding the response.
         # The task ID is stored for tracking.
         from app.pdf.tasks import process_pdf
-        process_pdf.delay(str(doc.id), str(job.id))
+        
+        if getattr(settings, "USE_CELERY", False):
+            process_pdf.delay(str(doc.id), str(job.id))
+        else:
+            background_tasks.add_task(process_pdf, str(doc.id), str(job.id))
 
         return PdfUploadResponse(
             document_id=doc.id,

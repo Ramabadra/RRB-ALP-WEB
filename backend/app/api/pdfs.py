@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, File, Form, Query, UploadFile, status
 
 from app.core.dependencies import CurrentUserId, DbSession
 from app.core.config import get_settings
@@ -45,6 +45,7 @@ router = APIRouter(prefix="/pdfs", tags=["PDFs"])
 async def upload_pdf(
     db: DbSession,
     user_id: CurrentUserId,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="PDF file to upload"),
     exam_name: str | None = Form(None, description="e.g. 'RRB ALP 2024'"),
     exam_year: int | None = Form(None, description="e.g. 2024"),
@@ -55,6 +56,7 @@ async def upload_pdf(
     return await service.upload(
         user_id=user_id,
         file=file,
+        background_tasks=background_tasks,
         exam_name=exam_name,
         exam_year=exam_year,
         exam_shift=exam_shift,

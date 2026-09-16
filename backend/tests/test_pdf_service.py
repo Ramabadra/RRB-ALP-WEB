@@ -15,7 +15,7 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 
 from app.services.pdf_service import PdfService
 
@@ -52,6 +52,7 @@ class TestPdfServiceValidation:
             await service.upload(
                 user_id=uuid.uuid4(),
                 file=file,
+                background_tasks=BackgroundTasks(),
                 exam_name=None, exam_year=None, exam_shift=None,
                 max_size_bytes=50 * 1024 * 1024,
             )
@@ -68,6 +69,7 @@ class TestPdfServiceValidation:
             await service.upload(
                 user_id=uuid.uuid4(),
                 file=file,
+                background_tasks=BackgroundTasks(),
                 exam_name=None, exam_year=None, exam_shift=None,
                 max_size_bytes=1,  # 1 byte max
             )
@@ -82,6 +84,7 @@ class TestPdfServiceValidation:
             await service.upload(
                 user_id=uuid.uuid4(),
                 file=file,
+                background_tasks=BackgroundTasks(),
                 exam_name=None, exam_year=None, exam_shift=None,
                 max_size_bytes=50 * 1024 * 1024,
             )
@@ -96,6 +99,7 @@ class TestPdfServiceValidation:
             await service.upload(
                 user_id=uuid.uuid4(),
                 file=file,
+                background_tasks=BackgroundTasks(),
                 exam_name=None, exam_year=None, exam_shift=None,
                 max_size_bytes=50 * 1024 * 1024,
             )
@@ -123,6 +127,7 @@ class TestPdfServiceValidation:
             response = await service.upload(
                 user_id=user_id,
                 file=file,
+                background_tasks=BackgroundTasks(),
                 exam_name="RRB ALP 2024",
                 exam_year=2024,
                 exam_shift="Shift 1",
@@ -152,6 +157,7 @@ class TestPdfServiceValidation:
             await service.upload(
                 user_id=user_id,
                 file=file,
+                background_tasks=BackgroundTasks(),
                 exam_name=None, exam_year=None, exam_shift=None,
                 max_size_bytes=50 * 1024 * 1024,
             )

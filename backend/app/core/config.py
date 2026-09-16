@@ -50,7 +50,8 @@ class Settings(BaseSettings):
     MAX_PDF_SIZE_MB: int = 50
 
     # ─── Redis / Celery ──────────────────────────────────────────────────────
-    REDIS_URL: str = "redis://localhost:6379/0"
+    USE_CELERY: bool = False
+    REDIS_URL: str | None = None
 
     # ─── Environment ─────────────────────────────────────────────────────────
     ENVIRONMENT: str = "development"
