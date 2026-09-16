@@ -99,6 +99,11 @@ def process_pdf(
             logger.error("Missing DB records: job=%s doc=%s", job_id, document_id)
             return {"error": "DB records not found"}
 
+        # Idempotency check: don't re-process if already done or in progress
+        if job.status in ("COMPLETED", "FAILED", "PROCESSING", "EXTRACTING", "OCR", "PARSING", "VALIDATING"):
+            logger.warning("Job %s is already %s, skipping.", job_id, job.status)
+            return {"status": "skipped", "reason": f"already {job.status}"}
+
         try:
             # ── Stage: PROCESSING ──────────────────────────────────────────────
             _update_job(
