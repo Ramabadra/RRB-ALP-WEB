@@ -99,9 +99,14 @@ def process_pdf(
             logger.error("Missing DB records: job=%s doc=%s", job_id, document_id)
             return {"error": "DB records not found"}
 
-        # Idempotency check: don't re-process if already done or in progress
-        if job.status in ("COMPLETED", "FAILED", "PROCESSING", "EXTRACTING", "OCR", "PARSING", "VALIDATING"):
-            logger.warning("Job %s is already %s, skipping.", job_id, job.status)
+        # Idempotency check: don't re-process if already successfully done
+        # or if currently in flight. FAILED jobs ARE retryable — do not block them.
+        if job.status == "COMPLETED":
+            logger.warning("Job %s is already COMPLETED, skipping.", job_id)
+            return {"status": "skipped", "reason": "already COMPLETED"}
+
+        if job.status in ("PROCESSING", "EXTRACTING", "OCR", "PARSING", "VALIDATING"):
+            logger.warning("Job %s is already in-flight (%s), skipping duplicate execution.", job_id, job.status)
             return {"status": "skipped", "reason": f"already {job.status}"}
 
         try:
@@ -232,8 +237,11 @@ def process_pdf(
             except Exception:
                 pass  # If DB is down, we can't do much
 
-            # Retry up to max_retries times
-            raise self.retry(exc=exc)
+            # When running under Celery: self.retry() would re-queue the task.
+            # When running under FastAPI BackgroundTasks (USE_CELERY=false): there
+            # is no broker, so we simply raise the original exception so Starlette
+            # logs it clearly. The DB is already in FAILED state at this point.
+            raise exc
 
 
 @shared_task(
