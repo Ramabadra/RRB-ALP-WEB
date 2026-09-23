@@ -10,6 +10,13 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.user import User
+    from app.models.mock_test import MockTest
+    from app.models.result import Result
+    from app.models.question import Question
 
 from sqlalchemy import (
     Boolean,

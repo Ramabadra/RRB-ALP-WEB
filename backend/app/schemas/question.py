@@ -44,7 +44,13 @@ class Language(str, Enum):
 
 
 class QuestionResponse(BaseModel):
-    """Full question response — used in question bank and review screens."""
+    """
+    Full question response including correct_answer and explanation.
+
+    ADMIN / CRUD USE ONLY — returned by POST/PATCH on the question bank.
+    MUST NOT be used for any endpoint a student calls during an active exam.
+    Use ExamQuestionResponse instead.
+    """
 
     id: UUID
     question_text: str
@@ -75,7 +81,7 @@ class QuestionResponse(BaseModel):
 
 
 class QuestionSummary(BaseModel):
-    """Lightweight question representation for lists — no correct answer exposed during exam."""
+    """Minimal safe question representation for paginated lists — no answer exposed."""
 
     id: UUID
     question_text: str
@@ -87,6 +93,41 @@ class QuestionSummary(BaseModel):
     topic_id: UUID | None
     difficulty: Difficulty
     source_type: SourceType
+
+    model_config = {"from_attributes": True}
+
+
+class ExamQuestionResponse(BaseModel):
+    """
+    Student-safe question payload — used for:
+      - GET /api/questions (list items served to students)
+      - GET /api/questions/{id}
+      - Any endpoint called during an active exam session
+
+    MUST NOT contain: correct_answer, explanation, or any answer-key field.
+    Backend grading services access correct_answer directly from the ORM model,
+    never through this schema.
+    """
+
+    id: UUID
+    question_text: str
+    option_a: str
+    option_b: str
+    option_c: str
+    option_d: str
+
+    subject_id: UUID | None
+    topic_id: UUID | None
+    subtopic: str | None
+    difficulty: Difficulty
+    language: Language
+
+    source_type: SourceType
+    source_exam: str | None
+    source_year: int | None
+
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 

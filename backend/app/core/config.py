@@ -37,7 +37,7 @@ class Settings(BaseSettings):
 
     # ─── AI — Google Gemini ──────────────────────────────────────────────────
     AI_API_KEY: str = ""
-    AI_MODEL: str = "gemini-3.8-flash"
+    AI_MODEL: str = "gemini-2.0-flash"
 
     # ─── Object Storage — Supabase Storage (S3-compatible) ───────────────────
     STORAGE_ENDPOINT: str = ""

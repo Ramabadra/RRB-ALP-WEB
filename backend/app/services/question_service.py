@@ -20,6 +20,7 @@ from app.models.question import Question
 from app.repositories.question_repository import QuestionRepository
 from app.schemas.common import PaginatedResponse
 from app.schemas.question import (
+    ExamQuestionResponse,
     QuestionCreateRequest,
     QuestionFilterParams,
     QuestionResponse,
@@ -41,7 +42,7 @@ class QuestionService:
         questions = await self._repo.list_paginated(filters, page, page_size)
         total_pages = math.ceil(total / page_size) if page_size else 1
         return PaginatedResponse(
-            items=[QuestionResponse.model_validate(q) for q in questions],
+            items=[ExamQuestionResponse.model_validate(q) for q in questions],
             total=total,
             page=page,
             page_size=page_size,

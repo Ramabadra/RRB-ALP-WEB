@@ -149,3 +149,195 @@ class TestQuestionService:
         assert response.total == 5
         assert len(response.items) == 3
         assert response.total_pages == 2
+
+
+# ── Security Regression Tests — Phase 4.2 ────────────────────────────────────
+# These tests prove that the student-facing APIs never expose correct_answer
+# or explanation, while backend grading retains full access.
+
+
+class TestQuestionSecuritySafeguards:
+
+    @pytest.mark.asyncio
+    async def test_get_question_response_has_no_correct_answer(self, db_session):
+        """
+        QuestionService.get_question() returns the raw ORM Question.
+        The router maps it to ExamQuestionResponse — which must NOT include correct_answer.
+        We test the schema directly to prove the field is absent at serialisation time.
+        """
+        from app.schemas.question import ExamQuestionResponse
+        service = QuestionService(db_session)
+        sub_id, top_id = await _seed_test_data(db_session)
+        req = make_question_create_req(sub_id, top_id, correct_answer=AnswerChoice.B)
+        question = await service.create_question(req)
+        await db_session.commit()
+
+        # This is what the GET /api/questions/{id} router returns
+        safe_response = ExamQuestionResponse.model_validate(question)
+        serialised = safe_response.model_dump()
+
+        assert "correct_answer" not in serialised
+        assert "explanation" not in serialised
+
+    @pytest.mark.asyncio
+    async def test_get_question_response_has_no_explanation(self, db_session):
+        """Explanation must not appear in ExamQuestionResponse."""
+        from app.schemas.question import ExamQuestionResponse
+        service = QuestionService(db_session)
+        sub_id, top_id = await _seed_test_data(db_session)
+        req = make_question_create_req(
+            sub_id, top_id,
+            explanation="The answer is B because 2+2=4."
+        )
+        question = await service.create_question(req)
+        await db_session.commit()
+
+        safe_response = ExamQuestionResponse.model_validate(question)
+        serialised = safe_response.model_dump()
+
+        assert "explanation" not in serialised
+        assert "correct_answer" not in serialised
+
+    @pytest.mark.asyncio
+    async def test_list_questions_items_have_no_correct_answer(self, db_session):
+        """
+        QuestionService.list_questions() uses ExamQuestionResponse for items.
+        No item in the paginated list must contain correct_answer.
+        """
+        service = QuestionService(db_session)
+        sub_id, top_id = await _seed_test_data(db_session)
+
+        for i in range(3):
+            req = make_question_create_req(
+                sub_id, top_id,
+                question_text=f"Security Q{i}",
+                correct_answer=AnswerChoice.C,
+                explanation="Explanation text",
+            )
+            await service.create_question(req)
+        await db_session.commit()
+
+        filters = QuestionFilterParams()
+        response = await service.list_questions(filters, page=1, page_size=10)
+
+        for item in response.items:
+            serialised = item.model_dump() if hasattr(item, "model_dump") else dict(item)
+            assert "correct_answer" not in serialised, (
+                f"correct_answer leaked in list item: {serialised}"
+            )
+            assert "explanation" not in serialised, (
+                f"explanation leaked in list item: {serialised}"
+            )
+
+    @pytest.mark.asyncio
+    async def test_exam_question_response_schema_contains_safe_fields(self, db_session):
+        """ExamQuestionResponse must include all question content except answers."""
+        from app.schemas.question import ExamQuestionResponse
+        service = QuestionService(db_session)
+        sub_id, top_id = await _seed_test_data(db_session)
+        req = make_question_create_req(sub_id, top_id, question_text="Safe schema test")
+        question = await service.create_question(req)
+        await db_session.commit()
+
+        safe = ExamQuestionResponse.model_validate(question)
+        serialised = safe.model_dump()
+
+        # Required safe fields must be present
+        assert "id" in serialised
+        assert "question_text" in serialised
+        assert "option_a" in serialised
+        assert "option_b" in serialised
+        assert "option_c" in serialised
+        assert "option_d" in serialised
+        assert "difficulty" in serialised
+        assert "source_type" in serialised
+
+        # Sensitive fields must be absent
+        assert "correct_answer" not in serialised
+        assert "explanation" not in serialised
+        assert "verification_status" not in serialised
+        assert "extraction_confidence" not in serialised
+
+    @pytest.mark.asyncio
+    async def test_backend_grading_accesses_correct_answer_from_orm(self, db_session):
+        """
+        Backend grading MUST be able to read correct_answer from the ORM Question model.
+        This test confirms the ORM model retains the field — schema safety
+        should not remove it from the database level.
+        """
+        service = QuestionService(db_session)
+        sub_id, top_id = await _seed_test_data(db_session)
+        req = make_question_create_req(sub_id, top_id, correct_answer=AnswerChoice.D)
+        question = await service.create_question(req)
+        await db_session.commit()
+
+        # Fetch via service (returns ORM object)
+        fetched_question = await service.get_question(question.id)
+
+        # ORM model MUST expose correct_answer for grading
+        assert hasattr(fetched_question, "correct_answer")
+        assert fetched_question.correct_answer == "D"
+
+    @pytest.mark.asyncio
+    async def test_question_response_full_for_admin_create(self, db_session):
+        """
+        POST /api/questions returns QuestionResponse (full — includes correct_answer).
+        This is intentional for the admin/question-bank UI.
+        """
+        service = QuestionService(db_session)
+        sub_id, top_id = await _seed_test_data(db_session)
+        req = make_question_create_req(sub_id, top_id, correct_answer=AnswerChoice.A)
+        question = await service.create_question(req)
+        await db_session.commit()
+
+        # Admin create returns QuestionResponse (includes correct_answer)
+        from app.schemas.question import QuestionResponse
+        admin_response = QuestionResponse.model_validate(question)
+        serialised = admin_response.model_dump()
+
+        assert "correct_answer" in serialised
+        assert serialised["correct_answer"] == "A"
+
+    @pytest.mark.asyncio
+    async def test_exam_question_schema_cannot_be_constructed_with_correct_answer(self, db_session):
+        """
+        ExamQuestionResponse must not accept a correct_answer field at all.
+        If someone attempts to construct it with one, Pydantic should ignore it
+        (strict schemas drop extra fields by default).
+        """
+        from app.schemas.question import ExamQuestionResponse
+        service = QuestionService(db_session)
+        sub_id, top_id = await _seed_test_data(db_session)
+        req = make_question_create_req(sub_id, top_id)
+        question = await service.create_question(req)
+        await db_session.commit()
+
+        safe = ExamQuestionResponse.model_validate(question)
+        assert not hasattr(safe, "correct_answer"), (
+            "ExamQuestionResponse must not have a correct_answer attribute"
+        )
+
+    @pytest.mark.asyncio
+    async def test_delete_question_removes_record_safely(self, db_session):
+        """
+        Regression: delete still works after schema refactor.
+        """
+        service = QuestionService(db_session)
+        sub_id, top_id = await _seed_test_data(db_session)
+        req = make_question_create_req(sub_id, top_id)
+        question = await service.create_question(req)
+        await db_session.commit()
+
+        await service.delete_question(question.id)
+        with pytest.raises(HTTPException) as exc_info:
+            await service.get_question(question.id)
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_get_nonexistent_question_raises_404(self, db_session):
+        """Regression: 404 still raised for unknown question ID."""
+        service = QuestionService(db_session)
+        with pytest.raises(HTTPException) as exc_info:
+            await service.get_question(uuid.uuid4())
+        assert exc_info.value.status_code == 404
+

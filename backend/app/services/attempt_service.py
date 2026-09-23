@@ -34,6 +34,7 @@ from app.repositories.question_repository import QuestionRepository
 from app.schemas.attempt import (
     AnswerSaveRequest,
     AttemptStatusResponse,
+    PersistedAnswer,
     SubmitResponse,
 )
 from app.services.scoring_engine import ScoringEngine
@@ -121,8 +122,20 @@ class AttemptService:
             remaining = (attempt.expires_at - _utcnow()).total_seconds()
             seconds_remaining = max(0, int(remaining))
 
+        # Load persisted answers — safe subset (no correct_answer)
+        raw_answers = await self._repo.get_answers(attempt_id)
+        persisted = [
+            PersistedAnswer(
+                question_id=a.question_id,
+                selected_answer=a.selected_answer,  # None or "A"/"B"/"C"/"D"
+                is_marked=a.is_marked,
+            )
+            for a in raw_answers
+        ]
+
         return AttemptStatusResponse(
             id=attempt.id,
+            mock_test_id=attempt.mock_test_id,
             status=attempt.status,
             started_at=attempt.started_at,
             expires_at=attempt.expires_at,
@@ -130,6 +143,7 @@ class AttemptService:
             total_questions=mock_test.question_count,
             answered_count=counts["answered_count"],
             marked_count=counts["marked_count"],
+            answers=persisted,
         )
 
     # ── Save Answers ──────────────────────────────────────────────────────────

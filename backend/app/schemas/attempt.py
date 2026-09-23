@@ -5,10 +5,10 @@ Attempt and AttemptAnswer schemas.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 from app.schemas.question import AnswerChoice
 
@@ -54,21 +54,50 @@ class SingleAnswerSave(BaseModel):
     is_marked: bool = False
 
 
+class PersistedAnswer(BaseModel):
+    """
+    A single answer row returned inside AttemptStatusResponse.
+
+    Deliberately mirrors SingleAnswerSave so the frontend can seed its local
+    answer state directly.  This schema MUST NOT include correct_answer,
+    explanation, or any scoring information — the status endpoint is called
+    during active exams.
+    """
+
+    question_id: UUID
+    selected_answer: AnswerChoice | None = None
+    is_marked: bool = False
+
+    model_config = {"from_attributes": True}
+
+
 class AttemptStatusResponse(BaseModel):
     """
-    Returned by GET /api/attempts/{id} during an active exam.
-    Includes the server timestamps so the frontend can reconstruct the timer.
+    Returned by GET /api/attempts/{attempt_id}/status.
+
+    Contains everything the frontend needs to reconstruct the exam after a
+    browser refresh, reconnect, or tab switch:
+      - Server-computed seconds_remaining (authoritative timer)
+      - mock_test_id to reload the question list
+      - answers list with the user's persisted selections and mark-for-review flags
+
+    IMPORTANT: correct_answer is never included.  This endpoint is safe to
+    call during an active exam session.
     """
 
     id: UUID
+    mock_test_id: UUID
     status: str
     started_at: datetime | None
     expires_at: datetime | None
-    # Seconds remaining as computed by backend (convenience field)
-    seconds_remaining: int | None
+    # Seconds remaining as computed by the server from expires_at.
+    # None when the attempt is NOT_STARTED or already SUBMITTED/EXPIRED.
+    seconds_remaining: Optional[int]
     total_questions: int
     answered_count: int
     marked_count: int
+    # Persisted answer state — used to restore the exam UI on refresh.
+    answers: List[PersistedAnswer] = []
 
     model_config = {"from_attributes": True}
 

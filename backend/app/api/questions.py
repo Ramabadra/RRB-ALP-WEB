@@ -2,11 +2,15 @@
 Questions router — full question bank CRUD.
 
 Routes:
-  GET    /api/questions              → paginated, filterable list
-  GET    /api/questions/{id}         → single question
-  POST   /api/questions              → create manually
-  PATCH  /api/questions/{id}         → partial update
+  GET    /api/questions              → student-safe paginated list (ExamQuestionResponse)
+  GET    /api/questions/{id}         → student-safe single question (ExamQuestionResponse)
+  POST   /api/questions              → create manually (QuestionResponse — admin, includes correct_answer)
+  PATCH  /api/questions/{id}         → partial update (QuestionResponse — admin)
   DELETE /api/questions/{id}         → delete
+
+Security note:
+  GET endpoints use ExamQuestionResponse which NEVER includes correct_answer or explanation.
+  QuestionResponse (with correct_answer) is ONLY returned from write endpoints.
 """
 
 from __future__ import annotations
@@ -16,9 +20,11 @@ from uuid import UUID
 from fastapi import APIRouter, Query, status
 
 from app.core.dependencies import CurrentUserId, DbSession
+from app.core.config import get_settings
 from app.schemas.common import PaginatedResponse
 from app.schemas.question import (
     Difficulty,
+    ExamQuestionResponse,
     Language,
     QuestionCreateRequest,
     QuestionFilterParams,
@@ -41,7 +47,7 @@ router = APIRouter(prefix="/questions", tags=["Questions"])
     summary="List questions",
     description=(
         "Returns a paginated, filterable list of questions from the question bank. "
-        "All filter parameters are optional and can be combined."
+        "Response items use ExamQuestionResponse — correct_answer and explanation are NEVER included."
     ),
 )
 async def list_questions(
@@ -72,17 +78,22 @@ async def list_questions(
 
 @router.get(
     "/{question_id}",
-    response_model=QuestionResponse,
-    summary="Get a question by ID",
+    response_model=ExamQuestionResponse,
+    summary="Get a question by ID (student-safe)",
+    description=(
+        "Returns question text and options. "
+        "correct_answer and explanation are NEVER included in this response. "
+        "Backend grading accesses correct_answer directly from the database."
+    ),
 )
 async def get_question(
     question_id: UUID,
     db: DbSession,
     _user_id: CurrentUserId,
-) -> QuestionResponse:
+) -> ExamQuestionResponse:
     service = QuestionService(db)
     question = await service.get_question(question_id)
-    return QuestionResponse.model_validate(question)
+    return ExamQuestionResponse.model_validate(question)
 
 
 @router.post(
@@ -158,13 +169,19 @@ async def validate_question(
     "/validate-batch",
     status_code=status.HTTP_202_ACCEPTED,
     summary="Queue a batch of questions for validation",
-    description="Asynchronously validates a batch of questions using Celery.",
+    description="Asynchronously validates a batch of questions using Celery (USE_CELERY=true only).",
 )
 async def validate_questions_batch(
     body: QuestionValidateBatchRequest,
     db: DbSession,
     _user_id: CurrentUserId,
 ) -> dict:
+    if not get_settings().USE_CELERY:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Batch validation requires Celery. USE_CELERY is disabled in this deployment.",
+        )
     from app.pdf.tasks import validate_questions_batch as task
     task.delay([str(q_id) for q_id in body.question_ids])
     return {"message": f"Queued {len(body.question_ids)} questions for validation."}
