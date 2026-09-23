@@ -1,0 +1,6 @@
+{
+  "name": "RRB ALP Mock Test Platform",
+  "description": "A premium, modern RRB ALP CBT preparation platform frontend.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

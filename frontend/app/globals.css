@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+@theme {
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 1rem;
+
+    /* Glassmorphism Light Variables */
+    --glass-bg: rgba(255, 255, 255, 0.6);
+    --glass-panel-bg: rgba(255, 255, 255, 0.75);
+    --glass-border: rgba(255, 255, 255, 1);
+    --glass-border-hover: rgba(255, 255, 255, 1);
+    --glass-shadow: rgba(37, 99, 235, 0.08);
+    --app-bg-gradient: 
+      radial-gradient(circle at 15% 50%, rgba(37, 99, 235, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 85% 30%, rgba(14, 165, 233, 0.1) 0%, transparent 50%);
+    --text-glow: none;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+
+    /* Glassmorphism Dark Variables */
+    --glass-bg: rgba(15, 23, 42, 0.4);
+    --glass-panel-bg: rgba(2, 6, 23, 0.6);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-border-hover: rgba(255, 255, 255, 0.2);
+    --glass-shadow: rgba(0, 0, 0, 0.5);
+    --app-bg-gradient: 
+      radial-gradient(circle at 15% 50%, rgba(30, 58, 138, 0.4) 0%, transparent 50%),
+      radial-gradient(circle at 85% 30%, rgba(14, 165, 233, 0.25) 0%, transparent 50%);
+    --text-glow: drop-shadow(0 0 10px rgba(96, 165, 250, 0.6));
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased min-h-screen transition-colors duration-300;
+    background-image: var(--app-bg-gradient);
+    background-attachment: fixed;
+  }
+}
+
+/* Reusable Glassmorphism Classes */
+.glass {
+  @apply backdrop-blur-xl transition-all duration-300;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 4px 24px -8px var(--glass-shadow);
+}
+
+.glass-panel {
+  @apply backdrop-blur-2xl transition-all duration-300;
+  background: var(--glass-panel-bg);
+  border: 1px solid var(--glass-border);
+}
+
+.glass-hover:hover {
+  @apply bg-black/5 dark:bg-white/10;
+  border-color: var(--glass-border-hover);
+}
+
+.glass-button {
+  @apply bg-blue-600/90 hover:bg-blue-500/100 text-white backdrop-blur-md transition-all duration-300 font-medium;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 15px rgba(37, 99, 235, 0.4);
+}
+
+.text-glow {
+  filter: var(--text-glow);
+}
