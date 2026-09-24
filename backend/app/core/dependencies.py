@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.core.security import decode_access_token
 from app.database.session import AsyncSessionLocal
+from app.models.user import User
 
 # ─── Reusable dependency type aliases ─────────────────────────────────────────
 SettingsDep = Annotated[Settings, Depends(get_settings)]
@@ -104,7 +105,6 @@ async def get_current_user(
     Use this dependency when you need the full User (e.g. for profile endpoints).
     Use CurrentUserId when you only need the UUID (cheaper — no DB round-trip).
     """
-    from app.models.user import User
     from sqlalchemy import select
 
     result = await db.execute(select(User).where(User.id == user_id))
@@ -118,4 +118,4 @@ async def get_current_user(
     return user
 
 
-CurrentUser = Annotated["User", Depends(get_current_user)]  # type: ignore[name-defined]
+CurrentUser = Annotated[User, Depends(get_current_user)]
