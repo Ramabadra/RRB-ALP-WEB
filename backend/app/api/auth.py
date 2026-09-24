@@ -48,7 +48,7 @@ async def google_login(request: Request) -> GoogleAuthInitResponse:
     Step 1 of Google OAuth.
     Returns the URL the frontend must redirect the browser to.
     """
-    redirect_uri = get_callback_uri(str(request.base_url).rstrip("/"))
+    redirect_uri = get_callback_uri()
     authorization_url, _state = build_authorization_url(redirect_uri)
     return GoogleAuthInitResponse(authorization_url=authorization_url)
 
@@ -86,7 +86,7 @@ async def google_callback(
             detail="Missing authorization code from Google.",
         )
 
-    redirect_uri = get_callback_uri(str(request.base_url).rstrip("/"))
+    redirect_uri = get_callback_uri()
 
     # ── Exchange code for Google tokens ──────────────────────────────────────
     try:

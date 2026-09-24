@@ -17,6 +17,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from slowapi import _rate_limit_exceeded_handler
@@ -115,6 +116,11 @@ def create_app() -> FastAPI:
         TrustedHostMiddleware, allowed_hosts=["*"]
     )
     
+    # ── Proxy Headers ─────────────────────────────────────────────────────────
+    # Trusts X-Forwarded-For headers from the reverse proxy (e.g., Render)
+    # Required for slowapi rate-limiting to use the real client IP.
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
+
     # ── CORS ──────────────────────────────────────────────────────────────────
     # Reads allowed origins from FRONTEND_URL env var (comma-separated).
     # Never uses wildcard "*" in production.

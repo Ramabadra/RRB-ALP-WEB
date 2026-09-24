@@ -52,6 +52,7 @@ export function useAuth() {
       }
     } catch (err) {
       console.error('Failed to get Google OAuth URL', err);
+      throw err;
     }
   };
 

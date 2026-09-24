@@ -53,12 +53,10 @@ class TestGoogleOAuthHelpers:
 
     def test_get_callback_uri_format(self):
         """get_callback_uri should produce a well-formed callback URL."""
-        result = get_callback_uri("http://localhost:8000")
-        assert result == "http://localhost:8000/api/auth/google/callback"
-
-    def test_get_callback_uri_strips_trailing_slash(self):
-        result = get_callback_uri("http://localhost:8000/")
-        assert result == "http://localhost:8000/api/auth/google/callback"
+        from app.core.config import get_settings
+        settings = get_settings()
+        result = get_callback_uri()
+        assert result == f"{settings.FRONTEND_URL.rstrip('/')}/callback"
 
 
 class TestOAuthEndToEndFlow:

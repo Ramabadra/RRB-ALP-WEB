@@ -91,7 +91,8 @@ async def get_google_user_info(access_token: str) -> Dict[str, Any]:
         return response.json()
 
 
-def get_callback_uri(base_url: str) -> str:
-    """Construct the OAuth callback URL from the backend's base URL."""
-    base_url = base_url.rstrip("/")
-    return f"{base_url}/api/auth/google/callback"
+def get_callback_uri() -> str:
+    """Construct the OAuth callback URL pointing to the frontend application."""
+    settings = get_settings()
+    frontend_url = settings.FRONTEND_URL.rstrip("/")
+    return f"{frontend_url}/callback"
