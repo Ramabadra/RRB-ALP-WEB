@@ -30,7 +30,7 @@ ALLOWED_QUESTION_COUNTS = {20, 30, 40, 50, 75}
 
 
 class MockTestGenerateRequest(BaseModel):
-    """Request body for POST /api/mock-tests/generate."""
+    """Request body for POST /api/mock-tests."""
 
     question_count: int = Field(
         30, description="Number of questions. Allowed: 20, 30, 40, 50, 75"

@@ -38,7 +38,7 @@ export const mockTestApi = {
       title: config.title || `RRB ALP ${config.questionCount}-Question Mock Test`,
     };
 
-    return fetchApi<MockTest>('/api/mock-tests/generate', {
+    return fetchApi<MockTest>('/api/mock-tests', {
       method: 'POST',
       body: payload,
     });
