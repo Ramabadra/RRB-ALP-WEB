@@ -33,13 +33,7 @@ export const analyticsApi = {
     }
 
     try {
-      // Try /api/analytics first (as in API_CONTRACT.md), then fallback to /api/analytics/dashboard
-      let data: any;
-      try {
-        data = await fetchApi<any>('/api/analytics');
-      } catch {
-        data = await fetchApi<any>('/api/analytics/dashboard');
-      }
+      const data = await fetchApi<any>('/api/analytics/dashboard');
 
       // Normalize fields
       const averageScore = Number(data.averageScore ?? data.average_score ?? 0);
