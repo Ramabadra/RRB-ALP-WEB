@@ -1,6 +1,6 @@
 import { fetchApi } from '../client';
-import { AuthResponse, GoogleLoginUrlResponse, User } from '@/types';
-import { setAccessToken, setStoredUser, clearSession } from '@/lib/auth/token';
+import { AuthResponse, GoogleLoginUrlResponse } from '@/types';
+import { setAccessToken, clearSession } from '@/lib/auth/token';
 
 export const authApi = {
   // Exchange Google ID token for backend JWT
@@ -10,11 +10,8 @@ export const authApi = {
       body: { token: googleToken },
       skipAuth: true,
     });
-    if (res?.token) {
-      setAccessToken(res.token);
-    }
-    if (res?.user) {
-      setStoredUser(res.user);
+    if (res?.access_token) {
+      setAccessToken(res.access_token);
     }
     return res;
   },
@@ -34,11 +31,8 @@ export const authApi = {
       params: { code, state },
       skipAuth: true,
     });
-    if (res?.token) {
-      setAccessToken(res.token);
-    }
-    if (res?.user) {
-      setStoredUser(res.user);
+    if (res?.access_token) {
+      setAccessToken(res.access_token);
     }
     return res;
   },

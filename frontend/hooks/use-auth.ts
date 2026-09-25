@@ -58,7 +58,6 @@ export function useAuth() {
 
   const loginWithGoogleToken = async (idToken: string) => {
     const res = await authApi.loginWithGoogleToken(idToken);
-    setUser(res.user);
     return res;
   };
 
