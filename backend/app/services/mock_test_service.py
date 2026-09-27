@@ -44,7 +44,7 @@ class MockTestService:
         subject_ids: List[UUID] = []
         if request.subjects:
             for name in request.subjects:
-                subject = await self._sub_repo.get_by_name(name.upper())
+                subject = await self._sub_repo.get_by_name(name)
                 if subject is None:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,

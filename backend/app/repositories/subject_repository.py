@@ -31,7 +31,7 @@ class SubjectRepository:
 
     async def get_by_name(self, name: str) -> Optional[Subject]:
         result = await self._db.execute(
-            select(Subject).where(Subject.name == name.upper())
+            select(Subject).where(Subject.name.ilike(name))
         )
         return result.scalar_one_or_none()
 
