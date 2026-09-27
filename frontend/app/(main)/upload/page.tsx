@@ -78,7 +78,7 @@ export default function UploadPage() {
         progress: uploadRes.progress || 10,
       });
 
-      startStatusPolling(uploadRes.jobId || uploadRes.documentId);
+      startStatusPolling(uploadRes.documentId || uploadRes.jobId);
     } catch (err: any) {
       console.error(err);
       setError(err?.message || "Failed to upload file. Please check backend connection.");

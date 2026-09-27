@@ -60,6 +60,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.error("Database connection FAILED: %s", exc)
         # Do not hard-crash on startup — let health check reflect the failure.
 
+    # ── Seed canonical subjects (idempotent — safe on every restart) ──────────
+    try:
+        from app.core.seed import seed_subjects
+        async with async_engine.begin() as conn:
+            await seed_subjects(conn)
+    except Exception as exc:
+        # Log but don't crash — read paths still work even if seed fails
+        logger.error("Subject seed FAILED (non-fatal): %s", exc)
+
     # ── Verify AI Model Availability ──────────────────────────────────────────
     settings = get_settings()
     if settings.AI_API_KEY:
