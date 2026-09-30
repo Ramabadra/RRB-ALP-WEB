@@ -11,6 +11,10 @@ can poll GET /api/pdfs/{id}/status to show a real-time progress bar.
 
 IMPORTANT: This task runs in a Celery worker (sync), not in the async FastAPI
 process. It uses a synchronous SQLAlchemy session (not AsyncSession).
+
+BackgroundTasks path: When USE_CELERY=False, pdf_service calls
+run_process_pdf_sync() directly — a plain sync function wrapped with
+asyncio.to_thread() so it doesn't block the event loop.
 """
 
 from __future__ import annotations
@@ -66,27 +70,13 @@ def _update_job(
     session.commit()
 
 
-@shared_task(
-    name="app.pdf.tasks.process_pdf",
-    bind=True,
-    max_retries=2,
-    default_retry_delay=30,
-    acks_late=True,
-)
-def process_pdf(
-    self,
-    document_id: str,
-    job_id: str,
-) -> dict:
+def _run_process_pdf_core(document_id: str, job_id: str) -> dict:
     """
-    Process an uploaded PDF end-to-end.
+    Core PDF processing logic — pure synchronous, no Celery dependency.
 
-    Args:
-        document_id: UUID string of the PdfDocument record.
-        job_id: UUID string of the PdfProcessingJob record.
-
-    Returns:
-        Summary dict with extracted/stored counts.
+    Called by both:
+    - The Celery @shared_task wrapper (Celery worker path)
+    - asyncio.to_thread() in BackgroundTasks (non-Celery path)
     """
     doc_uuid = uuid.UUID(document_id)
     job_uuid = uuid.UUID(job_id)
@@ -96,17 +86,25 @@ def process_pdf(
         doc = session.get(PdfDocument, doc_uuid)
 
         if job is None or doc is None:
-            logger.error("Missing DB records: job=%s doc=%s", job_id, document_id)
+            logger.error(
+                "[PDF_JOB] document_id=%s job_id=%s — Missing DB records",
+                document_id, job_id,
+            )
             return {"error": "DB records not found"}
 
         # Idempotency check: don't re-process if already successfully done
         # or if currently in flight. FAILED jobs ARE retryable — do not block them.
         if job.status == "COMPLETED":
-            logger.warning("Job %s is already COMPLETED, skipping.", job_id)
+            logger.warning(
+                "[PDF_JOB] document_id=%s — already COMPLETED, skipping", document_id
+            )
             return {"status": "skipped", "reason": "already COMPLETED"}
 
         if job.status in ("PROCESSING", "EXTRACTING", "OCR", "PARSING", "VALIDATING"):
-            logger.warning("Job %s is already in-flight (%s), skipping duplicate execution.", job_id, job.status)
+            logger.warning(
+                "[PDF_JOB] document_id=%s — already in-flight (%s), skipping",
+                document_id, job.status,
+            )
             return {"status": "skipped", "reason": f"already {job.status}"}
 
         try:
@@ -118,13 +116,26 @@ def process_pdf(
                 progress_pct=5.0,
                 current_stage="Downloading from storage",
             )
+            logger.info(
+                "[PDF_JOB] document_id=%s stage=PROCESSING", document_id
+            )
 
             storage = StorageClient()
             pdf_bytes = storage.download_pdf(doc.storage_key)
-            logger.info("Downloaded %d bytes for doc %s", len(pdf_bytes), document_id)
+            logger.info(
+                "[PDF_JOB] document_id=%s downloaded_bytes=%d", document_id, len(pdf_bytes)
+            )
 
             # ── Stage: EXTRACTING ─────────────────────────────────────────────
-            _update_job(session, job, status="EXTRACTING", progress_pct=15.0, current_stage="Extracting text")
+            _update_job(
+                session, job,
+                status="EXTRACTING",
+                progress_pct=15.0,
+                current_stage="Extracting text",
+            )
+            logger.info(
+                "[PDF_JOB] document_id=%s stage=EXTRACTING_TEXT", document_id
+            )
 
             extractor = PDFExtractor()
             extraction = extractor.extract(pdf_bytes)
@@ -134,11 +145,28 @@ def process_pdf(
             session.commit()
 
             if extraction.used_ocr:
-                _update_job(session, job, status="OCR", progress_pct=40.0, current_stage="OCR processing")
-                logger.info("Used OCR for doc %s", document_id)
+                _update_job(
+                    session, job,
+                    status="OCR",
+                    progress_pct=40.0,
+                    current_stage="OCR processing",
+                )
+                logger.info(
+                    "[PDF_JOB] document_id=%s stage=OCR page_count=%d",
+                    document_id, extraction.page_count,
+                )
 
             # ── Stage: PARSING ────────────────────────────────────────────────
-            _update_job(session, job, status="PARSING", progress_pct=60.0, current_stage="Parsing questions")
+            _update_job(
+                session, job,
+                status="PARSING",
+                progress_pct=60.0,
+                current_stage="Parsing questions",
+            )
+            logger.info(
+                "[PDF_JOB] document_id=%s stage=PARSING_QUESTIONS page_count=%d",
+                document_id, extraction.page_count,
+            )
 
             parser = QuestionParser()
             page_texts = [(p.page_number, p.text) for p in extraction.pages]
@@ -148,14 +176,20 @@ def process_pdf(
             session.commit()
 
             logger.info(
-                "Parsed %d questions, %d with answers for doc %s",
+                "[PDF_JOB] document_id=%s stage=PARSING_DONE "
+                "extracted=%d with_answers=%d",
+                document_id,
                 parse_result.total_extracted,
                 parse_result.total_with_answers,
-                document_id,
             )
 
-            # ── Stage: VALIDATING ─────────────────────────────────────────────
-            _update_job(session, job, status="VALIDATING", progress_pct=75.0, current_stage="Storing questions")
+            # ── Stage: VALIDATING / STORING ───────────────────────────────────
+            _update_job(
+                session, job,
+                status="VALIDATING",
+                progress_pct=75.0,
+                current_stage="Storing questions",
+            )
 
             stored_count = 0
             skipped_count = 0
@@ -164,11 +198,21 @@ def process_pdf(
                 # Skip very low confidence questions
                 if pq.confidence < 0.3:
                     skipped_count += 1
+                    logger.debug(
+                        "[PDF_JOB] document_id=%s — skipping Q#%s "
+                        "(confidence=%.2f < 0.3)",
+                        document_id, pq.source_number, pq.confidence,
+                    )
                     continue
 
                 # Skip questions with no correct answer unless it's a reference
                 if pq.correct_answer is None:
                     skipped_count += 1
+                    logger.debug(
+                        "[PDF_JOB] document_id=%s — skipping Q#%s "
+                        "(no correct_answer)",
+                        document_id, pq.source_number,
+                    )
                     continue
 
                 q = Question(
@@ -190,6 +234,12 @@ def process_pdf(
                 session.add(q)
                 stored_count += 1
 
+                if stored_count % 20 == 0:
+                    logger.info(
+                        "[PDF_JOB] document_id=%s stage=STORING stored=%d so far",
+                        document_id, stored_count,
+                    )
+
             session.commit()
 
             doc.questions_stored = stored_count
@@ -203,7 +253,7 @@ def process_pdf(
                 "total_with_answers": parse_result.total_with_answers,
                 "used_ocr": extraction.used_ocr,
                 "page_count": extraction.page_count,
-                "parse_warnings": parse_result.parse_warnings[:50],  # Cap at 50 warnings
+                "parse_warnings": parse_result.parse_warnings[:50],  # Cap at 50
             }
 
             _update_job(
@@ -216,31 +266,57 @@ def process_pdf(
             )
 
             logger.info(
-                "PDF processing COMPLETED: doc=%s stored=%d skipped=%d",
-                document_id, stored_count, skipped_count,
+                "[PDF_JOB] document_id=%s stage=COMPLETED "
+                "stored=%d skipped=%d pages=%d",
+                document_id, stored_count, skipped_count, extraction.page_count,
             )
             return result_summary
 
         except Exception as exc:
-            logger.exception("PDF processing FAILED for doc %s: %s", document_id, exc)
+            logger.exception(
+                "[PDF_JOB] document_id=%s — FAILED: %s", document_id, exc
+            )
 
             try:
-                # Best-effort — update job to FAILED status
                 _update_job(
                     session, job,
                     status="FAILED",
                     progress_pct=0.0,
                     current_stage=None,
-                    error_message=str(exc)[:500],  # Truncate to avoid huge error strings
+                    error_message=str(exc)[:500],
                     completed_at=_utcnow(),
                 )
             except Exception:
                 pass  # If DB is down, we can't do much
 
-            # When running under Celery: self.retry() would re-queue the task.
-            # When running under FastAPI BackgroundTasks (USE_CELERY=false): there
-            # is no broker, so we simply raise the original exception so Starlette
-            # logs it clearly. The DB is already in FAILED state at this point.
+            raise exc
+
+
+@shared_task(
+    name="app.pdf.tasks.process_pdf",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=30,
+    acks_late=True,
+)
+def process_pdf(
+    self,
+    document_id: str,
+    job_id: str,
+) -> dict:
+    """
+    Celery-wrapped entry point for PDF processing.
+
+    The real logic lives in _run_process_pdf_core() so it can also be called
+    directly (without a broker) via BackgroundTasks.
+    """
+    try:
+        return _run_process_pdf_core(document_id, job_id)
+    except Exception as exc:
+        # Let Celery retry on transient failures
+        try:
+            raise self.retry(exc=exc)
+        except self.MaxRetriesExceededError:
             raise exc
 
 
@@ -255,11 +331,11 @@ def validate_questions_batch(self, question_ids: list[str]) -> dict:
     """
     from app.ai.validator import AIValidator
     from app.models.subject import Subject
-    
+
     success_count = 0
     fail_count = 0
     validator = AIValidator()
-    
+
     with get_sync_db_session() as session:
         for q_id_str in question_ids:
             try:
@@ -267,9 +343,9 @@ def validate_questions_batch(self, question_ids: list[str]) -> dict:
                 q = session.get(Question, q_uuid)
                 if not q or q.verification_status == "VERIFIED":
                     continue
-                
+
                 ai_result = validator.validate_question(q)
-                
+
                 if not ai_result.is_valid:
                     q.verification_status = "REJECTED"
                     q.explanation = "AI marked this question as invalid or unreadable."
@@ -282,9 +358,8 @@ def validate_questions_batch(self, question_ids: list[str]) -> dict:
                     q.correct_answer = ai_result.correct_answer
                     q.explanation = ai_result.explanation
                     q.verification_status = "VERIFIED"
-                    
+
                     if ai_result.suggested_subject:
-                        # Case-insensitive match for the subject
                         sub = session.query(Subject).filter(
                             Subject.name.ilike(ai_result.suggested_subject)
                         ).first()
@@ -293,10 +368,13 @@ def validate_questions_batch(self, question_ids: list[str]) -> dict:
 
                 session.commit()
                 success_count += 1
-                
+
             except Exception as e:
-                logger.error("Failed to validate question %s: %s", q_id_str, e)
+                logger.error(
+                    "[PDF_JOB] validate_questions_batch — failed q_id=%s: %s",
+                    q_id_str, e,
+                )
                 session.rollback()
                 fail_count += 1
-                
+
     return {"success": success_count, "failed": fail_count}

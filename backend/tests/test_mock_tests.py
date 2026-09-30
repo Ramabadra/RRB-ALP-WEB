@@ -80,18 +80,23 @@ class TestMockTestService:
     async def test_generate_not_enough_questions_raises_400(self, db_session):
         user, sub, top, _ = await _seed_test_data(db_session)
         service = MockTestService(db_session)
-        
-        # We only seeded 25 questions, asking for 30 should fail
+
+        # We only seeded 25 questions; asking for 30 from the verified bank (PYQ)
+        # should raise 400.  Using source_type=PYQ exercises the bank-only path.
+        # (MIXED would correctly try Gemini for the deficit, which is the intended
+        #  new behaviour — the test here specifically validates the bank-only shortage.)
         req = MockTestGenerateRequest(
             question_count=30,
-            subjects=["MATH"]
+            subjects=["MATH"],
+            source_type=MockTestSourceType.PYQ,
         )
-        
+
         with pytest.raises(HTTPException) as exc_info:
             await service.generate(user.id, req)
-            
+
         assert exc_info.value.status_code == 400
         assert "Not enough verified questions available" in str(exc_info.value.detail)
+
 
     @pytest.mark.asyncio
     async def test_generate_invalid_subject_raises_400(self, db_session):

@@ -136,16 +136,25 @@ class PdfService:
         # but didn't pass it to create_document. Let's use doc.id from DB.)
         job = await self._repo.create_job(doc.id)
 
-        # ── Dispatch Celery task (after commit) ───────────────────────────────
-        # Note: We commit inside the FastAPI dependency (after the handler returns).
-        # For safety we dispatch after yielding the response.
-        # The task ID is stored for tracking.
-        from app.pdf.tasks import process_pdf
-        
+        # -- Dispatch processing job -----------------------------------------
+        # Celery path: send task to broker (USE_CELERY=True + Redis + worker).
+        # BackgroundTasks path: call _run_process_pdf_core (plain sync fn)
+        #   via asyncio.to_thread so it runs in a thread pool without blocking
+        #   the event loop. We do NOT use the @shared_task wrapper because
+        #   calling that wrapper tries to use the Celery broker, which silently
+        #   does nothing when no broker is configured -- root cause of QUEUED.
         if getattr(settings, "USE_CELERY", False):
+            from app.pdf.tasks import process_pdf
             process_pdf.delay(str(doc.id), str(job.id))
         else:
-            background_tasks.add_task(process_pdf, str(doc.id), str(job.id))
+            import asyncio as _asyncio
+            from app.pdf.tasks import _run_process_pdf_core
+            background_tasks.add_task(
+                _asyncio.to_thread,
+                _run_process_pdf_core,
+                str(doc.id),
+                str(job.id),
+            )
 
         return PdfUploadResponse(
             document_id=doc.id,
