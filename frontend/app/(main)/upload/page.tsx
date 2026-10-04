@@ -110,8 +110,9 @@ export default function UploadPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold text-muted-foreground block mb-1">Exam Title / Shift (Optional)</label>
+              <label htmlFor="exam-title" className="text-xs font-semibold text-muted-foreground block mb-1">Exam Title / Shift (Optional)</label>
               <input
+                id="exam-title"
                 type="text"
                 placeholder="e.g. RRB ALP 2018 Shift 1"
                 value={examName}
@@ -121,8 +122,9 @@ export default function UploadPage() {
               />
             </div>
             <div>
-              <label className="text-xs font-semibold text-muted-foreground block mb-1">Exam Year (Optional)</label>
+              <label htmlFor="exam-year" className="text-xs font-semibold text-muted-foreground block mb-1">Exam Year (Optional)</label>
               <input
+                id="exam-year"
                 type="text"
                 placeholder="e.g. 2018"
                 value={examYear}

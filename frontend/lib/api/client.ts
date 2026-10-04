@@ -16,7 +16,7 @@ export class ApiError extends Error {
 const RAW_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://rrb-alp-web.onrender.com';
 export const API_BASE_URL = RAW_BASE_URL.replace(/\/+$/, '');
 
-export const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'true';
+export const USE_MOCKS = false; // Forced to false. Previously: process.env.NEXT_PUBLIC_USE_MOCKS === 'true';
 
 interface FetchApiOptions extends Omit<RequestInit, 'body'> {
   body?: any;
