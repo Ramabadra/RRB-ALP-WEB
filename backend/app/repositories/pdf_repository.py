@@ -29,8 +29,9 @@ class PdfRepository:
         exam_name: str | None = None,
         exam_year: int | None = None,
         exam_shift: str | None = None,
+        document_id: UUID | None = None,
     ) -> PdfDocument:
-        doc = PdfDocument(
+        kwargs = dict(
             user_id=user_id,
             original_filename=original_filename,
             storage_key=storage_key,
@@ -40,6 +41,9 @@ class PdfRepository:
             exam_year=exam_year,
             exam_shift=exam_shift,
         )
+        if document_id is not None:
+            kwargs["id"] = document_id
+        doc = PdfDocument(**kwargs)
         self._db.add(doc)
         await self._db.flush()
         return doc

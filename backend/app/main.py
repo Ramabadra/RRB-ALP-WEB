@@ -81,11 +81,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception as exc:
             logger.error(
                 "Gemini AI configuration FAILED: Cannot access model '%s'. "
-                "Check AI_API_KEY and AI_MODEL (currently %s). Error: %s",
-                settings.AI_MODEL, settings.AI_MODEL, exc
+                "Check AI_API_KEY and AI_MODEL (currently '%s'). Error: %s\n"
+                "AI-dependent features (mock generation, validation) will be DISABLED. "
+                "All other endpoints (auth, question bank, exam attempts) remain operational.",
+                settings.AI_MODEL, settings.AI_MODEL, exc,
             )
-            # We raise here because the application cannot function correctly if the configured AI model is dead.
-            raise RuntimeError(f"Invalid Gemini AI configuration: {exc}") from exc
+            # Non-fatal: degrade gracefully. DB, auth, question bank still work.
     else:
         logger.warning("AI_API_KEY is missing! AI features will be disabled.")
 

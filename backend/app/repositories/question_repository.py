@@ -57,13 +57,11 @@ class QuestionRepository:
         page_size: int = 20,
     ) -> List[Question]:
         offset = (page - 1) * page_size
-        stmt = (
-            select(Question)
-            .order_by(Question.created_at.desc())
-            .offset(offset)
-            .limit(page_size)
-        )
+        # Filters MUST be applied before offset/limit so the WHERE clause
+        # reduces the result set before pagination is calculated.
+        stmt = select(Question).order_by(Question.created_at.desc())
         stmt = self._apply_filters(stmt, filters)
+        stmt = stmt.offset(offset).limit(page_size)
         result = await self._db.execute(stmt)
         return list(result.scalars().all())
 

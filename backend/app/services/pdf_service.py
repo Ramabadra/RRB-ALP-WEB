@@ -121,7 +121,11 @@ class PdfService:
         )
 
         # ── Persist DB records ────────────────────────────────────────────────
+        # Pass the pre-allocated document_id so the DB row id and the storage key
+        # UUID are always the same value. Previously they diverged, causing every
+        # background processing task to fail with a "PDF not found in storage" 404.
         doc = await self._repo.create_document(
+            document_id=document_id,
             user_id=user_id,
             original_filename=filename,
             storage_key=storage_key,
@@ -131,9 +135,6 @@ class PdfService:
             exam_year=exam_year,
             exam_shift=exam_shift,
         )
-        # Override the auto-generated UUID to match what we used for storage_key
-        # (SQLAlchemy flushes doc.id = uuid4() — we pre-assigned document_id above
-        # but didn't pass it to create_document. Let's use doc.id from DB.)
         job = await self._repo.create_job(doc.id)
 
         # -- Dispatch processing job -----------------------------------------

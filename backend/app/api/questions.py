@@ -149,20 +149,28 @@ async def delete_question(
 
 
 # ── AI Endpoints ─────────────────────────────────────────────────────────────
+# IMPORTANT: Static paths MUST be registered before parameterized /{question_id}
+# routes. If placed after, FastAPI tries to parse "generate"/"validate-batch"
+# as UUIDs and returns HTTP 422.
 
 @router.post(
-    "/{question_id}/validate",
-    response_model=QuestionResponse,
-    summary="Validate a question using AI",
-    description="Synchronously validates a single question. Updates text, options, answer, and status.",
+    "/generate",
+    response_model=list[QuestionCreateRequest],
+    summary="Generate new mock test questions via AI",
+    description="Generates questions and returns them. Does not save them to the database.",
 )
-async def validate_question(
-    question_id: UUID,
+async def generate_questions(
+    body: QuestionGenerateRequest,
     db: DbSession,
     _user_id: CurrentUserId,
-) -> QuestionResponse:
+) -> list[QuestionCreateRequest]:
     service = AIService(db)
-    return await service.validate_question(question_id)
+    return await service.generate_questions(
+        subject_id=body.subject_id,
+        topic_id=body.topic_id,
+        difficulty=body.difficulty,
+        count=body.count,
+    )
 
 
 @router.post(
@@ -187,21 +195,67 @@ async def validate_questions_batch(
     return {"message": f"Queued {len(body.question_ids)} questions for validation."}
 
 
-@router.post(
-    "/generate",
-    response_model=list[QuestionCreateRequest],
-    summary="Generate new mock test questions via AI",
-    description="Generates questions and returns them. Does not save them to the database.",
+@router.get(
+    "/{question_id}",
+    response_model=ExamQuestionResponse,
+    summary="Get a question by ID (student-safe)",
+    description=(
+        "Returns question text and options. "
+        "correct_answer and explanation are NEVER included in this response. "
+        "Backend grading accesses correct_answer directly from the database."
+    ),
 )
-async def generate_questions(
-    body: QuestionGenerateRequest,
+async def get_question(
+    question_id: UUID,
     db: DbSession,
     _user_id: CurrentUserId,
-) -> list[QuestionCreateRequest]:
+) -> ExamQuestionResponse:
+    service = QuestionService(db)
+    question = await service.get_question(question_id)
+    return ExamQuestionResponse.model_validate(question)
+
+
+@router.patch(
+    "/{question_id}",
+    response_model=QuestionResponse,
+    summary="Partially update a question",
+    description="Update any subset of question fields. All fields are optional.",
+)
+async def update_question(
+    question_id: UUID,
+    body: QuestionUpdateRequest,
+    db: DbSession,
+    _user_id: CurrentUserId,
+) -> QuestionResponse:
+    service = QuestionService(db)
+    question = await service.update_question(question_id, body)
+    return QuestionResponse.model_validate(question)
+
+
+@router.delete(
+    "/{question_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Delete a question",
+)
+async def delete_question(
+    question_id: UUID,
+    db: DbSession,
+    _user_id: CurrentUserId,
+) -> None:
+    service = QuestionService(db)
+    await service.delete_question(question_id)
+
+
+@router.post(
+    "/{question_id}/validate",
+    response_model=QuestionResponse,
+    summary="Validate a question using AI",
+    description="Synchronously validates a single question. Updates text, options, answer, and status.",
+)
+async def validate_question(
+    question_id: UUID,
+    db: DbSession,
+    _user_id: CurrentUserId,
+) -> QuestionResponse:
     service = AIService(db)
-    return await service.generate_questions(
-        subject_id=body.subject_id,
-        topic_id=body.topic_id,
-        difficulty=body.difficulty,
-        count=body.count,
-    )
+    return await service.validate_question(question_id)
